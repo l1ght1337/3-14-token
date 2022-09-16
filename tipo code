@@ -41,7 +41,7 @@ contract ERC20 is IERC20 {
     }
 
     function decimals() external pure override returns(uint) {
-        return 18; // 1 token = 1 wei
+        return 18; 
     }
 
     function totalSupply() external view override returns(uint) {
@@ -104,7 +104,7 @@ contract ERC20 is IERC20 {
 
     function transferFrom(address sender, address recipient, uint amount) public override enoughTokens(sender, amount) {
         _beforeTokenTransfer(sender, recipient, amount);
-        //require(allowances[sender][recipient] >= amount, "check allowance!");
+        require(allowances[sender][recipient] >= amount, "check allowance!");
         allowances[sender][recipient] -= amount; // error!
 
         balances[sender] -= amount;

@@ -1,172 +1,158 @@
-pragma solidity ^0.8.0;
+pragma solidity ^0.4.24;
 
-interface IERC20 {
-    function name() external view returns(string memory);
 
-    function symbol() external view returns(string memory);
-
-    function decimals() external pure returns(uint); // 0
-
-    function totalSupply() external view returns(uint);
-
-    function balanceOf(address account) external view returns(uint);
-
-    function transfer(address to, uint amount) external;
-
-    function allowance(address _owner, address spender) external view returns(uint);
-
-    function approve(address spender, uint amount) external;
-
-    function transferFrom(address sender, address recipient, uint amount) external;
-
-    event Transfer(address indexed from, address indexed to, uint amount);
-
-    event Approve(address indexed owner, address indexed to, uint amount);
+contract SafeMath {
+    function safeAdd(uint a, uint b) public pure returns (uint c) {
+        c = a + b;
+        require(c >= a);
+    }
+    function safeSub(uint a, uint b) public pure returns (uint c) {
+        require(b <= a);
+        c = a - b;
+    }
+    function safeMul(uint a, uint b) public pure returns (uint c) {
+        c = a * b;
+        require(a == 0 || c / a == b);
+    }
+    function safeDiv(uint a, uint b) public pure returns (uint c) {
+        require(b > 0);
+        c = a / b;
+    }
 }
 
-contract ERC20 is IERC20 {
-    uint totalTokens;
-    address owner;
-    mapping(address => uint) balances;
-    mapping(address => mapping(address => uint)) allowances;
-    string _name;
-    string _symbol;
 
-    function name() external view override returns(string memory) {
-        return _name;
-    }
 
-    function symbol() external view override returns(string memory) {
-        return _symbol;
-    }
+contract ERC20Interface {
+    function totalSupply() public constant returns (uint);
+    function balanceOf(address tokenOwner) public constant returns (uint balance);
+    function allowance(address tokenOwner, address spender) public constant returns (uint remaining);
+    function transfer(address to, uint tokens) public returns (bool success);
+    function approve(address spender, uint tokens) public returns (bool success);
+    function transferFrom(address from, address to, uint tokens) public returns (bool success);
 
-    function decimals() external pure override returns(uint) {
-        return 18; 
-    }
+    event Transfer(address indexed from, address indexed to, uint tokens);
+    event Approval(address indexed tokenOwner, address indexed spender, uint tokens);
+}
 
-    function totalSupply() external view override returns(uint) {
-        return totalTokens;
-    }
 
-    modifier enoughTokens(address _from, uint _amount) {
-        require(balanceOf(_from) >= _amount, "not enough tokens!");
-        _;
-    }
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not an owner!");
-        _;
-    }
+contract ApproveAndCallFallBack {
+    function receiveApproval(address from, uint256 tokens, address token, bytes data) public;
+}
 
-    constructor(string memory name_, string memory symbol_, uint initialSupply, address shop) {
-        _name = name_;
-        _symbol = symbol_;
+
+
+contract Owned {
+    address public owner;
+    address public newOwner;
+
+    event OwnershipTransferred(address indexed _from, address indexed _to);
+
+    constructor() public {
         owner = msg.sender;
-        mint(initialSupply, shop);
     }
 
-    function balanceOf(address account) public view override returns(uint) {
-        return balances[account];
-    }
-
-    function transfer(address to, uint amount) external override enoughTokens(msg.sender, amount) {
-        _beforeTokenTransfer(msg.sender, to, amount);
-        balances[msg.sender] -= amount;
-        balances[to] += amount;
-        emit Transfer(msg.sender, to, amount);
-    }
-
-    function mint(uint amount, address shop) public onlyOwner {
-        _beforeTokenTransfer(address(0), shop, amount);
-        balances[shop] += amount;
-        totalTokens += amount;
-        emit Transfer(address(0), shop, amount);
-    }
-
-    function burn(address _from, uint amount) public onlyOwner {
-        _beforeTokenTransfer(_from, address(0), amount);
-        balances[_from] -= amount;
-        totalTokens -= amount;
-    }
-
-    function allowance(address _owner, address spender) public view override returns(uint) {
-        return allowances[_owner][spender];
-    }
-
-    function approve(address spender, uint amount) public override {
-        _approve(msg.sender, spender, amount);
-    }
-
-    function _approve(address sender, address spender, uint amount) internal virtual {
-        allowances[sender][spender] = amount;
-        emit Approve(sender, spender, amount);
-    }
-
-    function transferFrom(address sender, address recipient, uint amount) public override enoughTokens(sender, amount) {
-        _beforeTokenTransfer(sender, recipient, amount);
-        require(allowances[sender][recipient] >= amount, "check allowance!");
-        allowances[sender][recipient] -= amount; // error!
-
-        balances[sender] -= amount;
-        balances[recipient] += amount;
-        emit Transfer(sender, recipient, amount);
-    }
-
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint amount
-    ) internal virtual {}
-}
-
-contract Token is ERC20 {
-    constructor(address shop) ERC20("3,14", "3,14", 200000, shop) {}
-}
-
-contract MShop {
-    IERC20 public token;
-    address payable public owner;
-    event Bought(uint _amount, address indexed _buyer);
-    event Sold(uint _amount, address indexed _seller);
-
-    constructor() {
-        token = new Token(address(this));
-        owner = payable(msg.sender);
-    }
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "not an owner!");
+    modifier onlyOwner {
+        require(msg.sender == owner);
         _;
     }
 
-    function sell(uint _amountToSell) external {
-        require(
-            _amountToSell > 0 &&
-            token.balanceOf(msg.sender) >= _amountToSell,
-            "incorrect amount!"
-        );
+    function transferOwnership(address _newOwner) public onlyOwner {
+        newOwner = _newOwner;
+    }
+    function acceptOwnership() public {
+        require(msg.sender == newOwner);
+        emit OwnershipTransferred(owner, newOwner);
+        owner = newOwner;
+        newOwner = address(0);
+    }
+}
 
-        uint allowance = token.allowance(msg.sender, address(this));
-        require(allowance >= _amountToSell, "check allowance!");
 
-        token.transferFrom(msg.sender, address(this), _amountToSell);
 
-        payable(msg.sender).transfer(_amountToSell);
+contract trichetire is ERC20Interface, Owned, SafeMath {
+    string public symbol;
+    string public  name;
+    uint8 public decimals;
+    uint public _totalSupply;
 
-        emit Sold(_amountToSell, msg.sender);
+    mapping(address => uint) balances;
+    mapping(address => mapping(address => uint)) allowed;
+
+
+ 
+    constructor() public {
+        symbol = "3,14";
+        name = "3,14";
+        decimals = 18;
+        _totalSupply = 100000000000000000000000000;
+        balances[0xC6B42a6c9eA505524420b2b7EF9063c0b4aD2F87] = _totalSupply;
+        emit Transfer(address(0), 0xC6B42a6c9eA505524420b2b7EF9063c0b4aD2F87, _totalSupply);
     }
 
-    receive() external payable {
-        uint tokensToBuy = msg.value; // 1 wei = 1 token
-        require(tokensToBuy > 0, "not enough funds!");
 
-        require(tokenBalance() >= tokensToBuy, "not enough tokens!");
-
-        token.transfer(msg.sender, tokensToBuy);
-        emit Bought(tokensToBuy, msg.sender);
+  
+    function totalSupply() public constant returns (uint) {
+        return _totalSupply  - balances[address(0)];
     }
 
-    function tokenBalance() public view returns(uint) {
-        return token.balanceOf(address(this));
+
+  
+    function balanceOf(address tokenOwner) public constant returns (uint balance) {
+        return balances[tokenOwner];
+    }
+
+
+   
+    function transfer(address to, uint tokens) public returns (bool success) {
+        balances[msg.sender] = safeSub(balances[msg.sender], tokens);
+        balances[to] = safeAdd(balances[to], tokens);
+        emit Transfer(msg.sender, to, tokens);
+        return true;
+    }
+
+
+   
+    function approve(address spender, uint tokens) public returns (bool success) {
+        allowed[msg.sender][spender] = tokens;
+        emit Approval(msg.sender, spender, tokens);
+        return true;
+    }
+
+
+  
+    function transferFrom(address from, address to, uint tokens) public returns (bool success) {
+        balances[from] = safeSub(balances[from], tokens);
+        allowed[from][msg.sender] = safeSub(allowed[from][msg.sender], tokens);
+        balances[to] = safeAdd(balances[to], tokens);
+        emit Transfer(from, to, tokens);
+        return true;
+    }
+
+
+    
+    function allowance(address tokenOwner, address spender) public constant returns (uint remaining) {
+        return allowed[tokenOwner][spender];
+    }
+
+
+    
+    function approveAndCall(address spender, uint tokens, bytes data) public returns (bool success) {
+        allowed[msg.sender][spender] = tokens;
+        emit Approval(msg.sender, spender, tokens);
+        ApproveAndCallFallBack(spender).receiveApproval(msg.sender, tokens, this, data);
+        return true;
+    }
+
+
+   
+    function () public payable {
+        revert();
+    }
+
+
+    
+    function transferAnyERC20Token(address tokenAddress, uint tokens) public onlyOwner returns (bool success) {
+        return ERC20Interface(tokenAddress).transfer(owner, tokens);
     }
 }
